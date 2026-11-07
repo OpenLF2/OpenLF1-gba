@@ -1,0 +1,81 @@
+# SPDX-License-Identifier: MIT
+name: Build GBA ROM
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # The original game data is not in this repository. The build downloads the public archive.org copy
+  # and refuses any other file. Set the repository variable GAME_ZIP_URL to use a different mirror
+  # that serves the same file.
+  GAME_ZIP_URL: ${{ vars.GAME_ZIP_URL || 'https://archive.org/download/msdos_Little_Fighter_1995/Little_Fighter_1995.zip' }}
+  GAME_ZIP_SHA256: a37716a020b5445d5d12cc2494e0ee2c7c0a9f5de0395e7e1e2a0d52a0d80246
+
+jobs:
+  rom:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the ARM toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc-arm-none-eabi binutils-arm-none-eabi libnewlib-arm-none-eabi \
+            libstdc++-arm-none-eabi-newlib make python3
+
+      - name: Download the game data
+        run: |
+          curl --fail --location --retry 3 --output Little_Fighter_1995.zip "$GAME_ZIP_URL"
+          echo "$GAME_ZIP_SHA256  Little_Fighter_1995.zip" | sha256sum --check
+
+      - name: Build the ROM
+        run: make ZIP=Little_Fighter_1995.zip
+
+      - name: Check the ROM header
+        run: |
+          python3 - <<'PY'
+          rom = open("build/openlf1.gba", "rb").read()
+          assert len(rom) >= 1 << 20 and len(rom) & (len(rom) - 1) == 0, "size must be a power of two"
+          assert rom[0xB2] == 0x96, "fixed header byte"
+          assert rom[0x04:0xA0] == open("build/boot_logo.bin", "rb").read(), "boot logo"
+          assert (-(sum(rom[0xA0:0xBD]) + 0x19)) & 0xFF == rom[0xBD], "header checksum"
+          print(f"ROM OK: {len(rom) // 1024} KiB, header valid")
+          PY
+
+      - name: Build the browser converter site
+        run: python3 tools/make_web_site.py build/openlf1.gba build/openlf1.elf build/assets site
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Upload the ROM
+        uses: actions/upload-artifact@v4
+        with:
+          name: openlf1-gba
+          path: build/openlf1.gba
+          if-no-files-found: error
+          retention-days: 14
+
+  # The site holds the prebuilt code and the converter, no game data: the visitor's browser downloads the game
+  # and converts it into the ROM.
+  pages:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: rom
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,11 @@
+{
+  "zipSize": 465592,
+  "zipSha256": "a37716a020b5445d5d12cc2494e0ee2c7c0a9f5de0395e7e1e2a0d52a0d80246",
+  "zipUrls": [
+    "https://archive.org/cors/msdos_Little_Fighter_1995/Little_Fighter_1995.zip",
+    "https://archive.org/download/msdos_Little_Fighter_1995/Little_Fighter_1995.zip"
+  ],
+  "zipPage": "https://archive.org/details/msdos_Little_Fighter_1995",
+  "logoUrl": "https://raw.githubusercontent.com/devkitPro/gba-tools/master/src/gbafix.c",
+  "pyodide": "https://cdn.jsdelivr.net/pyodide/v0.27.7/full/"
+}
